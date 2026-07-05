@@ -19,6 +19,11 @@ jobs:
     # Cold first run compiles the pinned verso forks from source (no Mathlib);
     # warm runs restore the caches below and finish in a few minutes.
     timeout-minutes: 120
+    env:
+      # Python 3.11+ caps int<->str conversion at 4300 digits; the quine's
+      # Gödel number N is ~5800 digits, so gen_quine.py's str(N) trips the cap
+      # on the runner's Python. 0 disables the limit.
+      PYTHONINTMAXSTRDIGITS: '0'
     steps:
       - uses: actions/checkout@v5
 
