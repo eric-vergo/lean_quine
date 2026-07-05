@@ -3,7 +3,7 @@
 A Lean 4 program that prints its own source code and carries a kernel-checked, **axiom-free**
 proof of its own quineness. The output is *computed* from a single natural number — the file's
 base-1000 Gödel number — not read from disk, so it is a genuine quine rather than a photocopier.
-The whole thing is also published as a [verso-blueprint](../verso-blueprint) site.
+The whole thing is also published as a [verso-blueprint](https://github.com/eric-vergo/verso-blueprint) site.
 
 ## The theorem
 
@@ -68,10 +68,17 @@ python3 scripts/gen_quine.py --check   # verify the checked-in file is a fixpoin
 
 ## Building this repo
 
-`lean_quine` is a **verso-workspace consumer**: it is local-wired to sibling fork checkouts and
-does not build in isolation. It needs `../verso`, `../verso-blueprint`, and (transitively)
-`../subverso` present next to it, exactly as the other consumers in the workspace do. The quine
-core (`Quine`, `QuineFacts`, `Test`, and the `quine` executable) imports nothing but the Lean
-prelude and builds without touching verso; only the blueprint site lib pulls in the forks.
+`lean_quine` builds **standalone** — no sibling checkouts required. Its blueprint dependencies are
+the `eric-vergo` forks (branch `viewer-integration`), pinned by git at exact SHAs in `lakefile.lean`:
+
+| Package | Repo | Pinned SHA |
+|---------|------|------------|
+| `subverso` | `eric-vergo/subverso` | `62b4fda523e8b367180fac5e3c47a7d0f81dadd4` |
+| `verso` | `eric-vergo/verso` | `128e6d844a8ae57abb0bc19b7f64e1887429c4a2` |
+| `VersoBlueprint` | `eric-vergo/verso-blueprint` | `cb14b7467721ebaf5c8f5d13798d6d86288ca356` |
+
+`lake update` (or the first `lake build`) clones them into `.lake/packages/`. The quine core
+(`Quine`, `QuineFacts`, `Test`, and the `quine` executable) imports nothing but the Lean prelude and
+builds without touching verso; only the blueprint site lib pulls in the forks.
 
 Toolchain: `leanprover/lean4:v4.31.0`.

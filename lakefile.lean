@@ -1,14 +1,20 @@
 import Lake
 open Lake DSL
 
--- Local-wired consumer of the SIBLING fork checkouts, so edits to ../verso or
--- ../verso-blueprint are picked up on the next `lake build` with no push / `lake update` cycle.
+-- Standalone consumer: the eric-vergo forks (branch `viewer-integration`) are pinned by git
+-- at exact SHAs, so this repo builds in isolation with no sibling checkouts required.
 --
--- `require verso` is a ROOT-level direct require on purpose: verso-slides transitively pins
--- upstream leanprover/verso, which otherwise wins resolution and would re-introduce the CDN
--- `marked`. A root direct require overrides that, so our self-hosting fork is used.
-require verso from "../verso"
-require VersoBlueprint from "../verso-blueprint"
+-- All three pins are ROOT-level direct requires on purpose. Lake resolves deps name-first,
+-- root-first: a package resolved once by name is reused for every later `require` of that
+-- name, so these root pins SHADOW the forks' own internal path requires (verso's
+-- `require subverso from "../subverso"`, verso-blueprint's `../verso` / `../subverso`) AND
+-- verso-slides' transitive pin of upstream leanprover/verso (which would otherwise win and
+-- re-introduce the CDN `marked`). Order matters — subverso before verso before VersoBlueprint —
+-- so each name is claimed by our fork before any transitive require can reach it. The subverso
+-- pin is mandatory: without it the manifest inherits subverso as a `../subverso` path dep.
+require subverso from git "https://github.com/eric-vergo/subverso.git" @ "62b4fda523e8b367180fac5e3c47a7d0f81dadd4"
+require verso from git "https://github.com/eric-vergo/verso.git" @ "128e6d844a8ae57abb0bc19b7f64e1887429c4a2"
+require VersoBlueprint from git "https://github.com/eric-vergo/verso-blueprint.git" @ "cb14b7467721ebaf5c8f5d13798d6d86288ca356"
 
 package LeanQuine where
   precompileModules := false
