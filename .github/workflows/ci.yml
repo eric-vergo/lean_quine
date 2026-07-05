@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # Cold first run compiles the pinned verso forks from source (no Mathlib);
+    # warm runs restore the caches below and finish in a few minutes.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # lake-manifest.json is gitignored, so lakefile.lean (which pins the fork
+      # SHAs) is the source of truth for the resolved dependency set.
+      - name: Restore Lake package cache
+        uses: actions/cache@v5
+        with:
+          path: .lake/packages
+          key: ${{ runner.os }}-lq-packages-v1-${{ hashFiles('lean-toolchain', 'lakefile.lean') }}
+          restore-keys: |
+            ${{ runner.os }}-lq-packages-v1-
+
+      - name: Restore Lean build cache
+        uses: actions/cache@v5
+        with:
+          path: .lake/build
+          key: ${{ runner.os }}-lq-build-v1-${{ hashFiles('lean-toolchain', 'lakefile.lean') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-lq-build-v1-${{ hashFiles('lean-toolchain', 'lakefile.lean') }}-
+            ${{ runner.os }}-lq-build-v1-
+
+      # Quine core imports nothing from verso: fixpoint check + build of
+      # Quine/Test/QuineFacts/quine + byte-exact `quine | cmp - Quine.lean`.
+      - name: Verify the quine (fixpoint + build + byte-exact)
+        run: scripts/verify.sh
+
+      - name: Build the blueprint site lib
+        run: lake build Site
+
+      - name: Generate the blueprint site
+        run: |
+          rm -rf _out/site
+          lake env lean GenSite.lean   # #eval generator: Quine.lean's top-level `main` rules out a lean_exe
+
+      # Self-containment gate: the generated site must ship zero off-origin assets.
+      - name: Offline / self-containment gate
+        run: |
+          set -euo pipefail
+          test -f _out/site/html-multi/index.html
+          count="$(find _out/site/html-multi -type f | wc -l | tr -d ' ')"
+          [ "$count" -ge 20 ] || { echo "only $count files"; exit 1; }
+          # NB: explicit `if grep …; then exit 1; fi`, not `! grep …`. Under
+          # `set -e` a non-final `!`-inverted command that "fails" (grep matched)
+          # is exempt from -e and does NOT abort, so a mid-script `! grep` gate
+          # false-passes. `if` is safe.
+          if grep -RIl 'jsdelivr' _out/site/html-multi; then echo "off-origin: jsdelivr reference(s) found"; exit 1; fi
+          if grep -RIEl '<(script[^>]*[[:space:]]src|link[^>]*[[:space:]]href)="https?://' _out/site/html-multi; then echo "off-origin: external script/link asset(s) found"; exit 1; fi
